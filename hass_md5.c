@@ -63,67 +63,67 @@ void md5 (const unsigned char* block, uint32_t *A, uint32_t *B, uint32_t *C, uin
     uint32_t a = *A, b = *B, c = *C, d = *D, g = 0, res = 0;
     for (int i = 0; i < 64; i++){   //Цикл замены слов буфера 64 раза по правилам md5
         uint32_t temp = 0;
-        if (i <= 15){   // на 1 этапе реализуется через функцию F
+        if (i <= 15){   //На 1 этапе реализуется через функцию F
             g = i;
             res = F(b, c, d);
         }
-        else if (i > 15 && i <= 31){    // на 2 этапе реализуется через функцию G
+        else if (i > 15 && i <= 31){    //На 2 этапе реализуется через функцию G
             g = (5 * i + 1) % 16;
             res = G(b, c, d);
         }
-        else if (i > 31 && i <= 47){    // на 3 этапе реализуется через функцию H
+        else if (i > 31 && i <= 47){    //На 3 этапе реализуется через функцию H
             g = (3 * i + 5) % 16;
             res = H(b, c, d);
         }
-        else if (i > 47){   // на 4 этапе реализуется через функцию I
+        else if (i > 47){   //На 4 этапе реализуется через функцию I
             g = (7 * i) % 16;
             res = I(b, c, d);
         }
-        temp = d;   // Замена переменных согласно rcf
+        temp = d;   //Замена переменных согласно rcf
         d = c;
         c = b;
         b = b + rotate(a + res + K[i] + M[g], S[i]);
         a = temp;
     }
-    *A += a; *B += b; *C += c; *D += d;
+    *A += a; *B += b; *C += c; *D += d; //Прибавляем к старому значению новые
 }
 
-static inline unsigned char* pipeline_line (const char *input, size_t *out_len){
-    size_t size = strlen(input);
-    size_t start_len = size;
-    uint64_t bit_len = (uint64_t)start_len * 8;
-    size_t chang_len = ((size + 1 + 8 + 63) / 64) * 64;
-    unsigned char* temp = (unsigned char*) malloc(chang_len);
+static inline unsigned char* pipeline_line (const char *input, size_t *out_len){    //Функция заполнения введенной строки до станлартной для работы md5
+    size_t size = strlen(input);    //Длина введенной строки(который будет меняться и отображать сколько в блоке заполнено)
+    size_t start_len = size;    //Длина начальной строки, которое не меняется (для работы md5)
+    uint64_t bit_len = (uint64_t)start_len * 8; //start_len, только в битной формате (для корректного заполнения в конце блока)
+    size_t chang_len = ((size + 1 + 8 + 63) / 64) * 64; //Размер в байтах блока
+    unsigned char* temp = (unsigned char*) malloc(chang_len);   //Создание блока для сохранения в правильно формате исходного сообщения
     memset(temp, 0, chang_len);
-    memcpy(temp, input, size);
-    temp[size] = 0x80;
-    size++;
-    while (size % 64 != 56){
+    memcpy(temp, input, size);  //Копирование исходного сообщения в буфер
+    temp[size] = 0x80;  //Добавляем в конец сообщения 0х80 (согласно алгоритму)
+    size++; //Увеличиваем размер блока на 1
+    while (size % 64 != 56){    //Заполняем '0', пока не дойдем по последних 8 байт (так формируется блок)
         temp[size] = '\0';
         size++;
     }
-    for (int i = 0; i < 8; i++){
+    for (int i = 0; i < 8; i++){    //Согласно алгоритму, последние 8 байт блока = длина исходного сообщения в битовом формате
         temp[size+i] = (unsigned char)(bit_len >> (8 * i)) & 0xFF;
     }
-    *out_len = chang_len;
+    *out_len = chang_len;   //Сохраняем индекс последнего элемента блока для дальнейшей работы
     return temp;
 }
 
-static inline unsigned char* pipeline_file (const char* filename){
-    unsigned char temp[64];
-    uint32_t A = A0, B = B0, C = C0, D = D0;
+static inline unsigned char* pipeline_file (const char* filename){  //Реализован практически также, как и для строки, только сначала:
+    unsigned char temp[64]; //Тут включено и использование md5, так что эта функция берет файл и считает для него md5
+    uint32_t A = A0, B = B0, C = C0, D = D0;    //Начальные слова для md5
     uint64_t byte_len = 0;
     size_t temp_len = 0;
-    FILE *myfile = fopen(filename, "rb");
+    FILE *myfile = fopen(filename, "rb");   //Открывает файл
     if (myfile){
-        while ((temp_len = fread(temp, 1, 64, myfile)) == 64){
+        while ((temp_len = fread(temp, 1, 64, myfile)) == 64){  //Считает md5 для полных блоков
             md5 (temp, &A, &B, &C, &D);
             byte_len += temp_len;
         }
         byte_len += temp_len;
         temp[temp_len] = 0x80;
         size_t pip_len = temp_len + 1;
-        if (pip_len <= 56){
+        if (pip_len <= 56){ //Считает md5 для неполных блоков, заполняя его, эта часть когда не надо создавать отдельный блок
             while (pip_len % 64 != 56){
                 temp[pip_len] = '\0';
                 pip_len ++;
@@ -134,7 +134,7 @@ static inline unsigned char* pipeline_file (const char* filename){
             md5 (temp, &A, &B, &C, &D);
         }
 
-        else {
+        else {  //Считает md5 для неполных блоков, заполняя его, эта часть когда надо создавать отдельный блок
             while (pip_len % 64 != 0){
                 temp[pip_len] = '\0';
                 pip_len ++;
@@ -150,7 +150,7 @@ static inline unsigned char* pipeline_file (const char* filename){
         }
         fclose(myfile);
 
-        unsigned char* result = (unsigned char*) malloc(16);
+        unsigned char* result = (unsigned char*) malloc(16);    //Создание отдельного блока для вывода 4 слов хэша
         uint32_t words[4] = {A, B, C, D};
 
         for (int i = 0; i < 4; i++){
@@ -168,16 +168,15 @@ int main (){
     size_t str_len;
     unsigned char* res;
 
-    printf("Ur file: ");
+    printf("Ur file: ");    //Чтение названия файла
     scanf("%99s", str);
-    printf("Ты ввёл: [%s]\n", str);
     res = pipeline_file(str);
     if (res == NULL){
         printf("File error - could not open file\n");
         return 1;
     }
     printf("Results: ");
-    for (int i = 0; i < 16; i++){
+    for (int i = 0; i < 16; i++){   //Вывод хэша
         printf("%02x", res[i]);
     }
     printf("\n");
